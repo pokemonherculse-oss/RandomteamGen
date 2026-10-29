@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Random Team Maker</title>
+<style>
+:root{
+  --bg:#f3f6f4;--surface:#ffffff;--ink:#16211c;--muted:#5f6f67;--line:#d3ddd7;
+  --accent:#1f7a5a;--accent-ink:#ffffff;--chip:#e4efe9;--warn:#b3261e;
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){--bg:#0f1714;--surface:#17221d;--ink:#e8f1ec;--muted:#93a69b;--line:#2a3a32;--accent:#3fbf8f;--accent-ink:#06150f;--chip:#1f3129;--warn:#ff8a80;}
+}
+:root[data-theme="dark"]{--bg:#0f1714;--surface:#17221d;--ink:#e8f1ec;--muted:#93a69b;--line:#2a3a32;--accent:#3fbf8f;--accent-ink:#06150f;--chip:#1f3129;--warn:#ff8a80;}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif;line-height:1.5}
+main{max-width:880px;margin:0 auto;padding:28px 18px 60px}
+h1{font-family:Georgia,"Times New Roman",serif;font-size:clamp(2rem,6vw,3rem);margin:0 0 6px;letter-spacing:-.02em}
+.sub{color:var(--muted);margin:0 0 24px;max-width:60ch}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px}
+label{font-weight:600;display:block;margin-bottom:8px}
+textarea{width:100%;min-height:170px;resize:vertical;border:1px solid var(--line);border-radius:10px;padding:12px;font:inherit;background:var(--bg);color:var(--ink)}
+textarea:focus,input:focus,button:focus-visible{outline:3px solid var(--accent);outline-offset:1px}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:end;margin-top:14px}
+.addrow{display:flex;gap:8px;margin-bottom:12px}
+input[type=text],input[type=number]{border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:inherit;background:var(--bg);color:var(--ink)}
+input[type=text]{flex:1;min-width:0}
+input[type=number]{width:110px}
+button{font:inherit;font-weight:700;border:0;border-radius:10px;padding:11px 18px;cursor:pointer;background:var(--accent);color:var(--accent-ink)}
+button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+button:disabled{opacity:.5;cursor:not-allowed}
+.count{color:var(--muted);font-size:.95rem;margin-top:10px}
+.msg{color:var(--warn);font-weight:600;margin-top:10px;min-height:1.4em}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.chip{background:var(--chip);border-radius:999px;padding:4px 6px 4px 12px;display:inline-flex;align-items:center;gap:6px}
+.chip button{background:transparent;color:var(--muted);padding:0 8px;font-size:1.1rem;line-height:1.4;border-radius:999px}
+.chip button:hover{color:var(--warn)}
+.note{color:var(--muted);font-size:.92rem;margin-top:8px}
+.analysis{margin-top:12px;border:1px dashed var(--line);border-radius:10px;padding:12px;background:var(--bg)}
+.analysis[hidden],[hidden]{display:none!important}
+.analysis .ctl{display:flex;flex-wrap:wrap;gap:12px;margin:8px 0}
+.analysis label{font-weight:600;font-size:.9rem;margin:0 0 4px}
+select{border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit;background:var(--surface);color:var(--ink);max-width:100%}
+.file{margin:0 0 8px;font-size:.9rem;color:var(--muted)}
+#results{margin-top:26px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px;margin-top:12px}
+.team{background:var(--surface);border:1px solid var(--line);border-top:5px solid var(--accent);border-radius:12px;padding:14px}
+.team h3{margin:0 0 8px;font-family:Georgia,serif;font-size:1.15rem}
+.team h3 span{color:var(--muted);font-weight:400;font-size:.85rem;font-family:"Trebuchet MS",sans-serif}
+.team ul{margin:0;padding-left:20px}
+@media (prefers-reduced-motion:no-preference){.team{animation:pop .35s ease both}}
+@keyframes pop{from{transform:scale(.96);opacity:0}to{transform:none;opacity:1}}
+</style>
+</head>
+<body>
+<main>
+  <h1>Random Team Maker</h1>
+  <p class="sub">Add names, choose how many people go in each team, and shuffle. Every pick is random, and each name lands in exactly one team.</p>
+
+  <section class="panel">
+    <label for="paste">Paste names from anywhere: a list, comma-separated, or rows copied from Google Forms / Sheets</label>
+    <div class="file">Or load a file: <input type="file" id="file" accept=".csv,.tsv,.txt,text/plain,text/csv"></div>
+    <textarea id="paste" placeholder="Paste here. Examples:&#10;Asha, Ravi, Meera&#10;Sharma, Asha&#10;10/29/2026 14:22  asha@mail.com  Asha Sharma  98765 43210"></textarea>
+    <div class="analysis" id="analysis" hidden>
+      <div id="detect"></div>
+      <div class="ctl">
+        <div id="colWrap" hidden><label for="colSel">Which column has the names?</label><select id="colSel"></select></div>
+        <div id="commaWrap" hidden><label for="commaSel">Commas mean</label><select id="commaSel"><option value="split">Separate different names</option><option value="flip">Last, First (one person)</option></select></div>
+      </div>
+      <div class="note" id="preview"></div>
+    </div>
+    <div class="row">
+      <button id="addPaste" type="button" disabled>Add names</button>
+      <button id="clear" type="button" class="ghost">Clear all</button>
+    </div>
+
+    <div style="margin-top:22px">
+      <label for="single">Or type one name at a time</label>
+      <div class="addrow">
+        <input type="text" id="single" placeholder="Type a name and press Enter" autocomplete="off">
+        <button id="addOne" type="button">Add</button>
+      </div>
+    </div>
+
+    <div class="note" id="status" aria-live="polite"></div>
+    <div class="count" id="count">0 names added</div>
+    <div class="chips" id="chips"></div>
+
+    <div class="row" style="margin-top:20px">
+      <div>
+        <label for="size">Team size (people per team)</label>
+        <input type="number" id="size" min="1" value="3">
+      </div>
+      <button id="make" type="button">Make teams</button>
+    </div>
+    <div class="msg" id="msg" role="alert"></div>
+  </section>
+
+  <section id="results" hidden>
+    <div class="row" style="margin-top:0;align-items:center;justify-content:space-between">
+      <strong id="summary"></strong>
+      <div style="display:flex;gap:8px">
+        <button id="again" type="button" class="ghost">Shuffle again</button>
+        <button id="copy" type="button" class="ghost">Copy teams</button>
+      </div>
+    </div>
+    <div class="grid" id="grid"></div>
+  </section>
+</main>
+
+<script>
+(function(){
+  var names=[];
+  var $=function(id){return document.getElementById(id)};
+  var lastText="";
+
+  function render(){
+    $("count").textContent=names.length+(names.length===1?" name added":" names added");
+    var box=$("chips");box.innerHTML="";
+    names.forEach(function(n,i){
+      var c=document.createElement("span");c.className="chip";
+      c.appendChild(document.createTextNode(n));
+      var b=document.createElement("button");b.type="button";b.textContent="×";
+      b.setAttribute("aria-label","Remove "+n);
+      b.onclick=function(){names.splice(i,1);render()};
+      c.appendChild(b);box.appendChild(c);
+    });
+  }
+
+  function addNames(list){
+    list.forEach(function(raw){
+      var n=raw.trim();
+      if(n) names.push(n);
+    });
+    render();
+  }
+
+  $("addPaste").onclick=function(){
+    addNames($("paste").value.split(/[\n,;]+/));
+    $("paste").value="";
+  };
+  function addSingle(){
+    var v=$("single").value;
+    if(v.trim()){addNames([v]);}
+    $("single").value="";$("single").focus();
+  }
+  $("addOne").onclick=addSingle;
+  $("single").addEventListener("keydown",function(e){if(e.key==="Enter"){e.preventDefault();addSingle();}});
+  /* ---------- Smart name import ---------- */
+  var HDR=/^(name|names|full ?name|participants?|students?|members?|players?|timestamp|e-?mail( address)?|phone|mobile|contact|roll ?(no|number)?|id|s\.?no|sr\.?no|no|#|list|team|class|section|date|time)$/i;
+  var HEADY=/name|timestamp|e-?mail|phone|mobile|roll|participant|student|member|response|date|^id$/i;
+  var EMAIL=/^[^\s@]+@[^\s@]+\.[^\s@]+$/, URLRE=/^(https?:\/\/|www\.)/i;
+  var DATE=/^\d{1,4}[\/\-.]\d{1,2}[\/\-.]\d{1,4}([ T,]+\d{1,2}:\d{2}(:\d{2})?\s*(am|pm)?(\s*[A-Z]{2,4})?)?$/i;
+  var TIME=/^\d{1,2}:\d{2}(:\d{2})?\s*(am|pm)?$/i;
+  var SUFFIX=/^(jr|sr|ii|iii|iv|phd|md)\.?$/i;
+  var ov={col:null,comma:null},cur=null;
+
+  function splitCSV(line){
+    var out=[],c2="",q=false;
+    for(var i=0;i<line.length;i++){var c=line[i];
+      if(c==='"'){if(q&&line[i+1]==='"'){c2+='"';i++;}else q=!q;}
+      else if(c===','&&!q){out.push(c2);c2="";}
+      else c2+=c;}
+    out.push(c2);return out.map(function(s){return s.trim()});
+  }
+  function commas(l){return splitCSV(l).length-1}
+  function title(s){return s.toLowerCase().replace(/(^|[\s\-'’.])([a-z\u00e0-\u024f])/g,function(m,a,b){return a+b.toUpperCase()})}
+  function kind(s){
+    s=s.trim();if(!s)return "empty";
+    if(EMAIL.test(s))return "email";
+    if(URLRE.test(s))return "url";
+    if(DATE.test(s)||TIME.test(s))return "date";
+    if(!/\p{L}/u.test(s))return "number";
+    if(/^[+\d][\d\s\-().]{6,}$/.test(s))return "number";
+    if(HDR.test(s))return "hdr";
+    return "text";
+  }
+  function nameLike(s){return kind(s)==="text"&&s.split(/\s+/).length<=5&&!/\d/.test(s)&&s.length<=40}
+  function clean(raw,ign){
+    var s=String(raw||"").replace(/^[\s"'“”‘’]+|[\s"'“”‘’,;:]+$/g,"")
+      .replace(/^(?:\(?\d{1,3}[.)\]:]\s*|\d{1,3}\s*-\s+|[-*•▪●◦–—]\s+)/,"")
+      .replace(/\s+/g," ").trim();
+    var k=kind(s);
+    if(k==="empty")return null;
+    if(k==="email"){
+      var loc=s.split("@")[0].replace(/\d+/g," ").replace(/[._\-+]+/g," ").replace(/\s+/g," ").trim();
+      if(!loc){ign.push(s);return null}
+      return {name:title(loc),email:true};
+    }
+    if(k!=="text"||s.length>50){ign.push(s.length>24?s.slice(0,24)+"…":s);return null}
+    if(s===s.toLowerCase()||(s===s.toUpperCase()&&(s.length>3||s.indexOf(" ")>-1)))s=title(s);
+    return {name:s};
+  }
+  function analyze(text,o){
+    var lines=text.split(/\r?\n/).map(function(l){return l.trim()}).filter(Boolean);
+    var res={items:[],ignored:[],cols:null,col:null,commaOpt:false,comma:"split",desc:""};
+    if(!lines.length)return res;
+    var rows=null,tabs=lines.filter(function(l){return l.indexOf("\t")>-1}).length;
+    if(tabs>=Math.max(1,lines.length*0.5)){
+      rows=lines.map(function(l){return l.split("\t").map(function(c){return c.trim().replace(/^"(.*)"$/,"$1")})});
+      res.desc="spreadsheet / Google Forms paste";
+    }else if(lines.length>=2){
+      var freq={},best=0,bn=0;
+      lines.forEach(function(l){var n=commas(l);freq[n]=(freq[n]||0)+1});
+      for(var k in freq){if(freq[k]>bn){bn=freq[k];best=+k}}
+      if(best>=2&&bn>=lines.length*0.6){rows=lines.map(splitCSV);res.desc="CSV rows";}
+      else if(best===1&&bn>=lines.length*0.6){
+        var r2=lines.map(splitCSV);
+        var tableish=r2.some(function(r){return r.some(function(c){var kk=kind(c);return kk==="email"||kk==="date"||kk==="number"||kk==="hdr"})});
+        if(tableish){rows=r2;res.desc="CSV rows";}
+      }
+    }
+    if(rows){
+      var w=Math.max.apply(null,rows.map(function(r){return r.length}));
+      var hasH=rows[0].some(function(c){return HEADY.test(c)});
+      var head=hasH?rows[0]:[],body=hasH?rows.slice(1):rows,opts=[],fi=-1,li=-1;
+      head.forEach(function(h,i){if(/first|given/i.test(h))fi=i;if(/last|sur|family/i.test(h))li=i});
+      for(var c=0;c<w;c++){(function(c){
+        var cells=body.map(function(r){return r[c]||""}).filter(function(x){return x.trim()});
+        if(!cells.length)return;
+        var h=head[c]||"",score=cells.filter(nameLike).length/cells.length+(/name|participant|student|member|player/i.test(h)?(/first|last|sur/i.test(h)?0.4:1):0);
+        opts.push({id:String(c),score:score,get:function(r){return r[c]},label:(h||"Column "+(c+1))+" (e.g. "+cells[0].slice(0,18)+")"});
+      })(c)}
+      if(fi>-1&&li>-1)opts.push({id:"combo",score:1.6,get:function(r){return (r[fi]||"")+" "+(r[li]||"")},label:"First + Last name"});
+      var chosen=opts.filter(function(x){return String(x.id)===String(o.col)})[0];
+      if(!chosen){chosen=opts.slice().sort(function(a,b){return b.score-a.score})[0]}
+      res.cols=opts;
+      if(chosen){res.col=chosen.id;body.forEach(function(r){var it=clean(chosen.get(r),res.ignored);if(it)res.items.push(it)});}
+      res.desc+=" with "+w+" columns"+(hasH?", header row skipped":"");
+      return res;
+    }
+    var cm=lines.filter(function(l){return l.indexOf(",")>-1});
+    var one=cm.filter(function(l){return commas(l)===1});
+    var auto=(lines.length>=2&&cm.length&&one.length===cm.length&&cm.length>=lines.length*0.7)?"flip":"split";
+    var flip=(o.comma||auto)==="flip";
+    res.commaOpt=cm.length>0;res.comma=o.comma||auto;
+    var out=[];
+    lines.forEach(function(l){
+      l.split(/[\t;|]+/).forEach(function(seg){
+        var ps=splitCSV(seg);
+        if(flip&&ps.length===1&&ps[0].split(",").length===2)ps=ps[0].split(",").map(function(x){return x.trim()});
+        if(flip&&ps.length===2)out.push(SUFFIX.test(ps[1])?ps[0]+" "+ps[1]:ps[1]+" "+ps[0]);
+        else ps.forEach(function(p){p.split(/\s+(?:&|and|\+)\s+/i).forEach(function(x){out.push(x)})});
+      });
+    });
+    out.forEach(function(x){var it=clean(x,res.ignored);if(it)res.items.push(it)});
+    res.desc=cm.length?(flip?"“Last, First” on each line (flipped to First Last)":"comma-separated names"):(lines.length>1?"one name per line":"a single name");
+    return res;
+  }
+  function dedupe(items){
+    var seen={},add=[],dups=[];
+    names.forEach(function(n){seen[n.toLowerCase()]=1});
+    items.forEach(function(it){var k=it.name.toLowerCase();if(seen[k])dups.push(it.name);else{seen[k]=1;add.push(it.name)}});
+    return {add:add,dups:dups};
+  }
+  function short(a,n){return a.slice(0,n).join(", ")+(a.length>n?" +"+(a.length-n)+" more":"")}
+  function refresh(){
+    var t=$("paste").value,box=$("analysis"),btn=$("addPaste");
+    if(!t.trim()){box.hidden=true;btn.disabled=true;btn.textContent="Add names";ov={col:null,comma:null};return}
+    cur=analyze(t,ov);var d=dedupe(cur.items);cur.add=d.add;cur.dups=d.dups;
+    box.hidden=false;
+    $("detect").textContent="Detected: "+cur.desc;
+    var cw=$("colWrap");cw.hidden=!(cur.cols&&cur.cols.length>1);
+    if(!cw.hidden){var s=$("colSel");s.innerHTML="";cur.cols.forEach(function(c){var o=document.createElement("option");o.value=c.id;o.textContent=c.label;s.appendChild(o)});s.value=String(cur.col);}
+    var mw=$("commaWrap");mw.hidden=!(cur.commaOpt&&!cur.cols);
+    if(!mw.hidden)$("commaSel").value=cur.comma;
+    var p=cur.add.length?"Will add "+cur.add.length+": "+short(cur.add,8)+".":"No names found yet.";
+    var em=cur.items.filter(function(i){return i.email}).length;
+    if(em)p+=" "+em+" built from email addresses.";
+    if(cur.dups.length)p+=" Skipping duplicates: "+short(cur.dups,4)+".";
+    if(cur.ignored.length)p+=" Ignored (not names): "+short(cur.ignored,4)+".";
+    $("preview").textContent=p;
+    btn.disabled=!cur.add.length;
+    btn.textContent=cur.add.length?"Add "+cur.add.length+" name"+(cur.add.length===1?"":"s"):"Add names";
+  }
+  $("paste").addEventListener("paste",function(){ov={col:null,comma:null}});
+  $("paste").addEventListener("input",refresh);
+  $("colSel").addEventListener("change",function(){ov.col=this.value;refresh()});
+  $("commaSel").addEventListener("change",function(){ov.comma=this.value;refresh()});
+  $("file").addEventListener("change",function(){
+    var f=this.files&&this.files[0];if(!f)return;
+    var r=new FileReader();
+    r.onload=function(){ov={col:null,comma:null};$("paste").value=String(r.result||"");refresh()};
+    r.readAsText(f);this.value="";
+  });
+  function report(added,dups,ign){
+    var m="Added "+added+" name"+(added===1?"":"s")+".";
+    if(dups.length)m+=" Skipped "+dups.length+" duplicate"+(dups.length===1?"":"s")+" ("+short(dups,4)+").";
+    if(ign&&ign.length)m+=" Ignored "+ign.length+" item"+(ign.length===1?"":"s")+" that weren't names.";
+    $("status").textContent=m;
+  }
+  $("addPaste").onclick=function(){
+    if(!cur||!cur.add.length)return;
+    names=names.concat(cur.add);
+    report(cur.add.length,cur.dups,cur.ignored);
+    $("paste").value="";refresh();render();
+  };
+  function addSingle(){
+    var v=$("single").value;
+    if(v.trim()){
+      var a=analyze(v,{}),d=dedupe(a.items);
+      names=names.concat(d.add);render();report(d.add.length,d.dups,a.ignored);
+    }
+    $("single").value="";$("single").focus();
+  }
+  $("clear").onclick=function(){names=[];render();refresh();$("results").hidden=true;$("msg").textContent="";$("status").textContent=""};
+
+  // Unbiased random integer using crypto
+  function randInt(max){
+    var a=new Uint32Array(1),limit=Math.floor(4294967296/max)*max;
+    do{crypto.getRandomValues(a)}while(a[0]>=limit);
+    return a[0]%max;
+  }
+  // Fisher-Yates shuffle
+  function shuffle(arr){
+    var a=arr.slice();
+    for(var i=a.length-1;i>0;i--){var j=randInt(i+1);var t=a[i];a[i]=a[j];a[j]=t;}
+    return a;
+  }
+
+  function make(){
+    var msg=$("msg");msg.textContent="";
+    var size=parseInt($("size").value,10);
+    if(names.length<2){msg.textContent="Add at least 2 names first.";return;}
+    if(!size||size<1){msg.textContent="Enter a team size of 1 or more.";return;}
+    if(size>names.length){msg.textContent="Team size can't be bigger than the number of names ("+names.length+").";return;}
+
+    var shuffled=shuffle(names);
+    var teams=[];
+    for(var i=0;i<shuffled.length;i+=size){teams.push(shuffled.slice(i,i+size));}
+    // If the last team is short, spread its members across other teams so sizes stay even
+    var info="";
+    if(teams.length>1 && teams[teams.length-1].length<size){
+      var left=teams.pop();
+      if(left.length<size){
+        // keep as a smaller team (honest sizes) but note it
+        teams.push(left);
+        info=" The last team has "+left.length+" because the names don't divide evenly.";
+      }
+    }
+
+    var grid=$("grid");grid.innerHTML="";
+    var text=[];
+    teams.forEach(function(t,i){
+      var d=document.createElement("div");d.className="team";
+      d.style.animationDelay=(i*60)+"ms";
+      var h=document.createElement("h3");
+      h.appendChild(document.createTextNode("Team "+(i+1)+" "));
+      var s=document.createElement("span");s.textContent="("+t.length+")";h.appendChild(s);
+      var ul=document.createElement("ul");
+      t.forEach(function(n){var li=document.createElement("li");li.textContent=n;ul.appendChild(li);});
+      d.appendChild(h);d.appendChild(ul);grid.appendChild(d);
+      text.push("Team "+(i+1)+": "+t.join(", "));
+    });
+    lastText=text.join("\n");
+    $("summary").textContent=names.length+" names → "+teams.length+" teams."+info;
+    $("results").hidden=false;
+    $("results").scrollIntoView({behavior:"smooth",block:"start"});
+  }
+
+  $("make").onclick=make;
+  $("again").onclick=make;
+  $("copy").onclick=function(){
+    var b=$("copy");
+    function done(ok){b.textContent=ok?"Copied":"Copy failed";setTimeout(function(){b.textContent="Copy teams"},1500);}
+    try{navigator.clipboard.writeText(lastText).then(function(){done(true)},function(){done(false)});}
+    catch(e){done(false);}
+  };
+  render();
+})();
+</script>
+</body>
+</html>
